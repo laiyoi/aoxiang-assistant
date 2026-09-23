@@ -11,3 +11,4 @@
 *.apk
 !release-assets/*.apk
 *.iml
+/nwpu-jwxt/
