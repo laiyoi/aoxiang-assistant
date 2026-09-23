@@ -42,13 +42,23 @@ jobs:
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept SDK licenses and install platform
+        # ubuntu-latest 自带 Android SDK 并已接受许可，不要用
+        # android-actions/setup-android：它的 v3 会去安装早已下架的 legacy
+        # `tools` 包，直接 "Failed to find package 'tools'" 让 job 失败。
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "Android SDK not found at $SDK" >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          SDKMGR="$(find "$SDK/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          echo "sdkmanager: $SDKMGR"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMGR" --list_installed | head -n 40 || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
