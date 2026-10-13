@@ -3427,7 +3427,7 @@ public class MainActivity extends Activity {
         return card;
     }
 
-    /** 班次详情：按日期与线路分组，标出余位与是否可约。 */
+    /** 班次详情：按方向分成「长安 → 友谊」「友谊 → 长安」两个标签页，各自再按日期分组。 */
     private void showBusDetails() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -3436,8 +3436,102 @@ public class MainActivity extends Activity {
             showCoursePanel("校车", "可预约班次", box, dp(420));
             return;
         }
-        List<String> dates = new ArrayList<>();
+
+        List<BusModels.Trip> changAnToYouYi = new ArrayList<>();
+        List<BusModels.Trip> youYiToChangAn = new ArrayList<>();
         for (BusModels.Trip trip : busSnapshot.trips) {
+            if (busIsChangAnToYouYi(trip)) changAnToYouYi.add(trip);
+            else youYiToChangAn.add(trip);
+        }
+
+        final LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+
+        final Button tabCA = busDirectionTab("长安 → 友谊");
+        final Button tabYY = busDirectionTab("友谊 → 长安");
+        LinearLayout tabRow = new LinearLayout(this);
+        tabRow.addView(tabCA, new LinearLayout.LayoutParams(0, dp(42), 1));
+        addHorizontalGap(tabRow, 8);
+        tabRow.addView(tabYY, new LinearLayout.LayoutParams(0, dp(42), 1));
+        box.addView(tabRow);
+
+        addGap(box, 6);
+        box.addView(content);
+
+        tabCA.setOnClickListener(v -> {
+            styleBusDirectionTab(tabCA, true);
+            styleBusDirectionTab(tabYY, false);
+            renderBusTrips(content, changAnToYouYi);
+        });
+        tabYY.setOnClickListener(v -> {
+            styleBusDirectionTab(tabCA, false);
+            styleBusDirectionTab(tabYY, true);
+            renderBusTrips(content, youYiToChangAn);
+        });
+        styleBusDirectionTab(tabCA, true);
+        styleBusDirectionTab(tabYY, false);
+        renderBusTrips(content, changAnToYouYi);
+
+        showCoursePanel("校车", "可预约班次", box, dp(460));
+    }
+
+    /** 某班次是否属于「长安 → 友谊」方向；判定不出来时默认归入「长安 → 友谊」。 */
+    private boolean busIsChangAnToYouYi(BusModels.Trip trip) {
+        BusModels.Route route = busRouteById(trip.routeId);
+        if (route != null) {
+            String start = route.startStation;
+            if (!start.isEmpty()) return start.contains("长安");
+            if (!route.name.isEmpty()) return busRouteNameIsChangAnToYouYi(route.name);
+        }
+        return busRouteNameIsChangAnToYouYi(trip.routeName);
+    }
+
+    private boolean busRouteNameIsChangAnToYouYi(String routeName) {
+        int ca = routeName.indexOf("长安");
+        int yy = routeName.indexOf("友谊");
+        if (ca >= 0 && yy >= 0) return ca < yy;
+        return true;
+    }
+
+    private BusModels.Route busRouteById(String routeId) {
+        if (routeId == null || busSnapshot == null) return null;
+        for (BusModels.Route route : busSnapshot.routes) {
+            if (route.objId.equals(routeId)) return route;
+        }
+        return null;
+    }
+
+    /** 方向标签按钮：选中态用主题色描边 + 加粗，未选中用描边空底。 */
+    private Button busDirectionTab(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextSize(13);
+        button.setPadding(dp(4), dp(8), dp(4), dp(8));
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setAllCaps(false);
+        button.setSingleLine(true);
+        button.setStateListAnimator(null);
+        return button;
+    }
+
+    private void styleBusDirectionTab(Button button, boolean selected) {
+        button.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+        button.setTextColor(selected ? primaryColor() : mutedColor());
+        button.setBackground(border(selected ? panelColor() : Color.TRANSPARENT,
+                selected ? primaryColorWithAlpha(70) : lineColor(), 7));
+        applyRoundedOutline(button, 7, 0);
+    }
+
+    /** 把某个方向的班次按日期分组填充进内容区。 */
+    private void renderBusTrips(LinearLayout content, List<BusModels.Trip> trips) {
+        content.removeAllViews();
+        if (trips.isEmpty()) {
+            content.addView(emptyHint("该方向当前暂无班次"));
+            return;
+        }
+        List<String> dates = new ArrayList<>();
+        for (BusModels.Trip trip : trips) {
             if (!dates.contains(trip.date)) dates.add(trip.date);
         }
         java.util.Collections.sort(dates);
@@ -3446,13 +3540,12 @@ public class MainActivity extends Activity {
             day.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(-1, dp(30));
             dayParams.topMargin = dp(6);
-            box.addView(day, dayParams);
-            for (BusModels.Trip trip : busSnapshot.trips) {
+            content.addView(day, dayParams);
+            for (BusModels.Trip trip : trips) {
                 if (!trip.date.equals(date)) continue;
-                box.addView(busTripRow(trip));
+                content.addView(busTripRow(trip));
             }
         }
-        showCoursePanel("校车", "可预约班次", box, dp(460));
     }
 
     private LinearLayout busTripRow(BusModels.Trip trip) {
